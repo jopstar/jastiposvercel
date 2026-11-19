@@ -136,8 +136,41 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   useEffect(() => {
-    refreshData();
-  }, [refreshData]);
+    let ignore = false;
+    async function loadData() {
+      try {
+        const [resProd, resSettings, resOrders] = await Promise.allSettled([
+          fetch('/api/products').then((r) => (r.ok ? r.json() : null)),
+          fetch('/api/settings').then((r) => (r.ok ? r.json() : null)),
+          fetch('/api/orders').then((r) => (r.ok ? r.json() : null)),
+        ]);
+
+        if (ignore) return;
+
+        if (resProd.status === 'fulfilled' && resProd.value && Array.isArray(resProd.value)) {
+          setProducts(resProd.value);
+          localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(resProd.value));
+        }
+
+        if (resSettings.status === 'fulfilled' && resSettings.value) {
+          setSettings(resSettings.value);
+          localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(resSettings.value));
+        }
+
+        if (resOrders.status === 'fulfilled' && resOrders.value && Array.isArray(resOrders.value)) {
+          setOrders(resOrders.value);
+          localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(resOrders.value));
+        }
+      } catch (err) {
+        console.warn('API sync warning, falling back to local cache:', err);
+      }
+    }
+
+    loadData();
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   // Sync to LocalStorage
   useEffect(() => {

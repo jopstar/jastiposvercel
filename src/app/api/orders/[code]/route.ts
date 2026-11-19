@@ -8,9 +8,16 @@ export async function GET(
 ) {
   try {
     const { code } = await params;
-    const order = await prisma.order.findUnique({
-      where: { bookingCode: code },
+    const cleanCode = code.trim().toUpperCase();
+    let order = await prisma.order.findUnique({
+      where: { bookingCode: cleanCode },
     });
+
+    if (!order && cleanCode !== code) {
+      order = await prisma.order.findUnique({
+        where: { bookingCode: code },
+      });
+    }
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });

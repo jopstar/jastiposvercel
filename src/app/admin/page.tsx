@@ -419,7 +419,7 @@ export default function AdminPage() {
         {/* TAB 2: SETTINGS (KURS & INFO PO) */}
         {activeTab === 'settings' && (
           <div className="bg-white rounded-b-2xl border-x border-b border-slate-200 p-6 max-w-3xl">
-            <form onSubmit={handleSaveSettings} className="space-y-6">
+            <form key={`${settings.exchangeRateCNY}-${settings.poTitle}`} onSubmit={handleSaveSettings} className="space-y-6">
               {settingsSaved && (
                 <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2">
                   <Check className="w-4 h-4 text-emerald-600" />

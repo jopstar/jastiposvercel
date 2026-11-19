@@ -61,7 +61,7 @@ export default function CartDrawer() {
   const dpAmount = Math.round(cartGrandTotalIDR / 2);
   const amountToPay = paymentType === 'DP_50' ? dpAmount : cartGrandTotalIDR;
 
-  const handleCheckoutSubmit = (e: React.FormEvent) => {
+  const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!customerName.trim() || !whatsapp.trim() || !address.trim() || !city.trim()) {
@@ -70,7 +70,7 @@ export default function CartDrawer() {
     }
 
     // 1. Create order in store
-    const newOrder = createOrder({
+    const newOrder = await createOrder({
       customerName: customerName.trim(),
       whatsapp: whatsapp.trim(),
       address: address.trim(),
