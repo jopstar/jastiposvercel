@@ -1,26 +1,28 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { AppSettings, CartItem, Order, OrderStatus, Product } from '@/types';
 import { DEFAULT_SETTINGS, INITIAL_ORDERS, INITIAL_PRODUCTS } from './constants';
 
 interface StoreContextType {
   settings: AppSettings;
-  updateSettings: (newSettings: Partial<AppSettings>) => void;
+  updateSettings: (newSettings: Partial<AppSettings>) => Promise<void>;
   resetSettings: () => void;
 
   products: Product[];
-  addProduct: (product: Omit<Product, 'id'>) => void;
-  updateProduct: (id: string, product: Partial<Product>) => void;
-  deleteProduct: (id: string) => void;
+  addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
+  updateProduct: (id: string, product: Partial<Product>) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
   resetProducts: () => void;
 
   orders: Order[];
-  createOrder: (orderData: Omit<Order, 'bookingCode' | 'createdAt' | 'status' | 'statusHistory'>) => Order;
-  updateOrderStatus: (bookingCode: string, newStatus: OrderStatus, note?: string) => void;
-  updateOrderTracking: (bookingCode: string, trackingNumber: string) => void;
+  createOrder: (orderData: Omit<Order, 'bookingCode' | 'createdAt' | 'status' | 'statusHistory'>) => Promise<Order>;
+  updateOrderStatus: (bookingCode: string, newStatus: OrderStatus, note?: string) => Promise<void>;
+  updateOrderTracking: (bookingCode: string, trackingNumber: string) => Promise<void>;
   getOrderByCode: (code: string) => Order | undefined;
+  fetchOrderByCode: (code: string) => Promise<Order | null>;
   resetOrders: () => void;
+  refreshData: () => Promise<void>;
 
   cart: CartItem[];
   addToCart: (item: Omit<CartItem, 'id'>) => void;
@@ -60,8 +62,6 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
       const stored = localStorage.getItem(STORAGE_KEYS.SETTINGS);
       if (stored) {
         const parsed = JSON.parse(stored);
-        // Always sync these operational fields from DEFAULT_SETTINGS
-        // so changes in constants.ts take effect immediately
         return {
           ...parsed,
           usedLuggageQuotaKg: DEFAULT_SETTINGS.usedLuggageQuotaKg,
@@ -107,7 +107,39 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
 
-  // Sync to LocalStorage when state changes
+  // Fetch initial data from Supabase via API
+  const refreshData = useCallback(async () => {
+    try {
+      const [resProd, resSettings, resOrders] = await Promise.allSettled([
+        fetch('/api/products').then((r) => (r.ok ? r.json() : null)),
+        fetch('/api/settings').then((r) => (r.ok ? r.json() : null)),
+        fetch('/api/orders').then((r) => (r.ok ? r.json() : null)),
+      ]);
+
+      if (resProd.status === 'fulfilled' && resProd.value && Array.isArray(resProd.value)) {
+        setProducts(resProd.value);
+        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(resProd.value));
+      }
+
+      if (resSettings.status === 'fulfilled' && resSettings.value) {
+        setSettings(resSettings.value);
+        localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(resSettings.value));
+      }
+
+      if (resOrders.status === 'fulfilled' && resOrders.value && Array.isArray(resOrders.value)) {
+        setOrders(resOrders.value);
+        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(resOrders.value));
+      }
+    } catch (err) {
+      console.warn('API sync warning, falling back to local cache:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshData();
+  }, [refreshData]);
+
+  // Sync to LocalStorage
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
@@ -162,29 +194,75 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   // Settings
-  const updateSettings = (newSettings: Partial<AppSettings>) => {
-    setSettings((prev) => ({ ...prev, ...newSettings }));
+  const updateSettings = async (newSettings: Partial<AppSettings>) => {
+    const updated = { ...settings, ...newSettings };
+    setSettings(updated);
+
+    try {
+      await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch (err) {
+      console.error('Failed to sync settings with server:', err);
+    }
   };
 
   const resetSettings = () => {
-    setSettings(DEFAULT_SETTINGS);
+    updateSettings(DEFAULT_SETTINGS);
   };
 
   // Products
-  const addProduct = (productData: Omit<Product, 'id'>) => {
-    const newProduct: Product = {
+  const addProduct = async (productData: Omit<Product, 'id'>) => {
+    try {
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(productData),
+      });
+
+      if (res.ok) {
+        const created = await res.json();
+        setProducts((prev) => [created, ...prev]);
+        return;
+      }
+    } catch (err) {
+      console.error('Failed to save product to server:', err);
+    }
+
+    // Fallback local
+    const fallbackProduct: Product = {
       ...productData,
       id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     };
-    setProducts((prev) => [newProduct, ...prev]);
+    setProducts((prev) => [fallbackProduct, ...prev]);
   };
 
-  const updateProduct = (id: string, updated: Partial<Product>) => {
+  const updateProduct = async (id: string, updated: Partial<Product>) => {
     setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...updated } : p)));
+
+    try {
+      await fetch(`/api/products/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch (err) {
+      console.error('Failed to update product on server:', err);
+    }
   };
 
-  const deleteProduct = (id: string) => {
+  const deleteProduct = async (id: string) => {
     setProducts((prev) => prev.filter((p) => p.id !== id));
+
+    try {
+      await fetch(`/api/products/${id}`, {
+        method: 'DELETE',
+      });
+    } catch (err) {
+      console.error('Failed to delete product on server:', err);
+    }
   };
 
   const resetProducts = () => {
@@ -192,19 +270,20 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   // Orders
-  const createOrder = (orderData: Omit<Order, 'bookingCode' | 'createdAt' | 'status' | 'statusHistory'>): Order => {
+  const createOrder = async (orderData: Omit<Order, 'bookingCode' | 'createdAt' | 'status' | 'statusHistory'>): Promise<Order> => {
     const now = new Date();
     const yearMonth = now.toISOString().slice(0, 7).replace('-', '');
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const bookingCode = `JST-${yearMonth}-${randomSuffix}`;
 
-    const timestampStr = now.toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }) + ' WIB';
+    const timestampStr =
+      now.toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }) + ' WIB';
 
     const newOrder: Order = {
       ...orderData,
@@ -216,27 +295,38 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
           status: 'MENUNGGU_KONFIRMASI',
           timestamp: timestampStr,
           title: 'Pesanan Berhasil Dibuat',
-          description: `Pesanan telah masuk ke sistem. Mohon konfirmasi bukti transfer ${
-            orderData.paymentType === 'DP_50' ? 'DP 50%' : 'Pelunasan'
-          } via WhatsApp.`,
+          description: `Pesanan telah masuk ke sistem. Mohon konfirmasi bukti transfer ${orderData.paymentType === 'DP_50' ? 'DP 50%' : 'Pelunasan'
+            } via WhatsApp.`,
           location: 'Jakarta',
         },
       ],
     };
 
     setOrders((prev) => [newOrder, ...prev]);
+
+    try {
+      await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newOrder),
+      });
+    } catch (err) {
+      console.error('Failed to save order to server:', err);
+    }
+
     return newOrder;
   };
 
-  const updateOrderStatus = (bookingCode: string, newStatus: OrderStatus, note?: string) => {
+  const updateOrderStatus = async (bookingCode: string, newStatus: OrderStatus, note?: string) => {
     const now = new Date();
-    const timestampStr = now.toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }) + ' WIB';
+    const timestampStr =
+      now.toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }) + ' WIB';
 
     const statusTitleMap: Record<OrderStatus, { title: string; defaultDesc: string; location: string }> = {
       MENUNGGU_KONFIRMASI: {
@@ -276,20 +366,23 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
       },
     };
 
+    const targetOrder = orders.find((o) => o.bookingCode === bookingCode);
+    const currentHistory = targetOrder ? targetOrder.statusHistory : [];
+    const info = statusTitleMap[newStatus];
+    const newHistory = [
+      ...currentHistory,
+      {
+        status: newStatus,
+        timestamp: timestampStr,
+        title: info.title,
+        description: note || info.defaultDesc,
+        location: info.location,
+      },
+    ];
+
     setOrders((prev) =>
       prev.map((ord) => {
         if (ord.bookingCode !== bookingCode) return ord;
-        const info = statusTitleMap[newStatus];
-        const newHistory = [
-          ...ord.statusHistory,
-          {
-            status: newStatus,
-            timestamp: timestampStr,
-            title: info.title,
-            description: note || info.defaultDesc,
-            location: info.location,
-          },
-        ];
         return {
           ...ord,
           status: newStatus,
@@ -297,17 +390,61 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
         };
       })
     );
+
+    try {
+      await fetch(`/api/orders/${bookingCode}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: newStatus,
+          statusHistory: newHistory,
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to update order status on server:', err);
+    }
   };
 
-  const updateOrderTracking = (bookingCode: string, trackingNumber: string) => {
+  const updateOrderTracking = async (bookingCode: string, trackingNumber: string) => {
     setOrders((prev) =>
       prev.map((ord) => (ord.bookingCode === bookingCode ? { ...ord, trackingNumber } : ord))
     );
+
+    try {
+      await fetch(`/api/orders/${bookingCode}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackingNumber }),
+      });
+    } catch (err) {
+      console.error('Failed to update tracking on server:', err);
+    }
   };
 
   const getOrderByCode = (code: string) => {
     const cleanCode = code.trim().toUpperCase();
     return orders.find((o) => o.bookingCode.toUpperCase() === cleanCode);
+  };
+
+  const fetchOrderByCode = async (code: string): Promise<Order | null> => {
+    const cleanCode = code.trim().toUpperCase();
+    const existing = getOrderByCode(cleanCode);
+    if (existing) return existing;
+
+    try {
+      const res = await fetch(`/api/orders/${cleanCode}`);
+      if (res.ok) {
+        const order = await res.json();
+        setOrders((prev) => {
+          if (prev.some((o) => o.bookingCode === order.bookingCode)) return prev;
+          return [order, ...prev];
+        });
+        return order;
+      }
+    } catch (err) {
+      console.error('Failed to fetch order by code:', err);
+    }
+    return null;
   };
 
   const resetOrders = () => {
@@ -317,7 +454,6 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
   // Cart
   const addToCart = (item: Omit<CartItem, 'id'>) => {
     setCart((prev) => {
-      // If it's a catalog item and already in cart, increment quantity
       if (!item.isCustom && item.productId) {
         const existingIndex = prev.findIndex((i) => i.productId === item.productId);
         if (existingIndex > -1) {
@@ -326,7 +462,6 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
           return updated;
         }
       }
-      // Otherwise add as new
       const newItem: CartItem = {
         ...item,
         id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -376,7 +511,9 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
         updateOrderStatus,
         updateOrderTracking,
         getOrderByCode,
+        fetchOrderByCode,
         resetOrders,
+        refreshData,
         cart,
         addToCart,
         updateCartQty,

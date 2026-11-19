@@ -11,10 +11,64 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// Tambahkan model kamu di sini
-// Contoh:
-// model Order {
-//   id        String   @id @default(cuid())
-//   createdAt DateTime @default(now())
-//   updatedAt DateTime @updatedAt
-// }
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  category    String
+  priceCNY    Float
+  image       String
+  description String
+  weightGram  Int?
+  originStore String?
+  isPopular   Boolean  @default(false)
+  inStock     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("products")
+}
+
+model Order {
+  bookingCode        String   @id
+  customerName       String
+  whatsapp           String
+  address            String
+  city               String
+  postalCode         String?
+  courier            String
+  paymentType        String   // 'DP_50' | 'LUNAS'
+  subtotalItemsIDR   Float
+  totalFeeIDR        Float
+  grandTotalIDR      Float
+  dpAmountIDR        Float
+  remainingAmountIDR Float
+  status             String   @default("MENUNGGU_KONFIRMASI")
+  trackingNumber     String?
+  notes              String?
+  items              Json     // CartItem[]
+  statusHistory      Json     // OrderStatusHistory[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("orders")
+}
+
+model AppSettings {
+  id                   Int      @id @default(1)
+  exchangeRateCNY      Float    @default(2750)
+  feePercentage        Float    @default(10)
+  minFeeIDR            Float    @default(25000)
+  poTitle              String   @default("Jastip China Yangzhou - Batch #2")
+  poSubtitle           String   @default("Belanja langsung dari pusat retail Yangzhou & mall Jiangyang Wanda! Terpercaya, amanah, dan terjamin 100% original.")
+  poOrigin             String   @default("Yangzhou, Jiangsu (Tiongkok 🇨🇳)")
+  poCloseDate          String   @default("2026-12-06T23:59:59.000Z")
+  estArrivalDate       String   @default("11 Desember 2026")
+  estLocalShippingDate String   @default("12 Desember 2026")
+  adminWhatsapp        String   @default("628980706665")
+  totalLuggageQuotaKg  Float    @default(60)
+  usedLuggageQuotaKg   Float    @default(0)
+  notificationBanner   String?  @default("📢 Open PO Yangzhou Batch 2 Sedang Berjalan! Tutup PO dalam hitungan hari. Kuota bagasi terbatas!")
+  updatedAt            DateTime @updatedAt
+
+  @@map("app_settings")
+}

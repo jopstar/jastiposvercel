@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 
 function TrackContent() {
-  const { getOrderByCode, orders, settings, formatIDR, formatCNY } = useStore();
+  const { getOrderByCode, fetchOrderByCode, orders, settings, formatIDR, formatCNY } = useStore();
   const searchParams = useSearchParams();
   const codeParam = searchParams.get('code') || '';
 
@@ -36,6 +36,12 @@ function TrackContent() {
   const [activeCode, setActiveCode] = useState(codeParam.trim().toUpperCase());
   const [copiedResi, setCopiedResi] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+
+  useEffect(() => {
+    if (activeCode) {
+      fetchOrderByCode(activeCode);
+    }
+  }, [activeCode, fetchOrderByCode]);
 
   const currentOrder = activeCode ? getOrderByCode(activeCode) || null : null;
   const hasSearched = Boolean(activeCode);
