@@ -1,7 +1,7 @@
 import { AppSettings, Order, Product } from '@/types';
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  exchangeRateCNY: 2750,
+  exchangeRateCNY: 2740,
   feePercentage: 10,
   minFeeIDR: 25000,
   poTitle: 'Jastip China Yangzhou - Batch #2',
