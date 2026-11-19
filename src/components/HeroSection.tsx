@@ -2,15 +2,15 @@
 
 import React, { useEffect, useState } from 'react';
 import { useStore } from '@/lib/store';
-import { 
-  Clock, 
-  Plane, 
-  MapPin, 
-  Calendar, 
-  Luggage, 
-  Calculator, 
-  ArrowRight, 
-  CheckCircle2, 
+import {
+  Clock,
+  Plane,
+  MapPin,
+  Calendar,
+  Luggage,
+  Calculator,
+  ArrowRight,
+  CheckCircle2,
   ShoppingBag
 } from 'lucide-react';
 import Link from 'next/link';
@@ -68,7 +68,7 @@ export default function HeroSection() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
-          
+
           {/* Left Column: Heading, Context, and CTAs */}
           <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
             {/* Status Pills */}
@@ -144,7 +144,7 @@ export default function HeroSection() {
                   </span>
                 </div>
                 <span className="text-xs font-medium text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/30">
-                  Batch #28
+                  Batch #2
                 </span>
               </div>
 
